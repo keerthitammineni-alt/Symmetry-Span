@@ -1,6 +1,6 @@
 # Symmetry Span
 
-This repository contains a browser-based implementation of the Automated Shortened OSPAN (Operation Span) working-memory task built with jsPsych.
+This repository contains a browser-based implementation of the Automated Shortened SSPAN (Symmetry Span) working-memory task built with jsPsych.
 
 ## Project overview
 
