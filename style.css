@@ -1,0 +1,145 @@
+/* ======================================================
+   Automated Shortened OSPAN
+   Version 0.2
+   ====================================================== */
+
+body{
+    font-family: Arial, Helvetica, sans-serif;
+    background:white;
+}
+
+.jspsych-content{
+    max-width:900px;
+}
+
+.recall-panel{
+
+    width:700px;
+
+    margin:auto;
+
+    padding:25px;
+
+    border:2px solid black;
+
+    text-align:center;
+
+    background:white;
+
+}
+
+.instructions{
+
+    font-size:20px;
+
+    margin-bottom:25px;
+
+}
+
+.letter-grid{
+
+    display:grid;
+
+    grid-template-columns:repeat(4,1fr);
+
+    gap:18px;
+
+    width:500px;
+
+    margin:auto;
+
+}
+
+.letter-cell{
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:center;
+
+}
+
+.number-box{
+
+    width:48px;
+
+    height:48px;
+
+    border:2px solid black;
+
+    margin-bottom:8px;
+
+    font-size:22px;
+
+    font-weight:bold;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    cursor:pointer;
+
+    user-select:none;
+
+}
+
+.number-box:hover{
+
+    background:#efefef;
+
+}
+
+.letter{
+
+    font-size:26px;
+
+    font-weight:bold;
+
+}
+
+.response-string{
+
+    height:35px;
+
+    margin-top:25px;
+
+    margin-bottom:20px;
+
+    font-size:24px;
+
+    letter-spacing:4px;
+
+}
+
+.button-row{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    margin-top:20px;
+
+}
+
+.button-row button{
+
+    font-size:18px;
+
+    padding:10px 30px;
+
+}
+
+#blankBtn{
+
+    margin:auto;
+
+}
+
+#enterBtn:disabled{
+
+    opacity:.5;
+
+}
