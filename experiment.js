@@ -6,12 +6,20 @@ console.log("experiment.v2.js loaded");
 // Random Letter Practice
 // =====================================================
 
+// Set Qualtrics return URL
+window.qualtricsReturnUrl = "https://merceruniversity.co1.qualtrics.com/jfe/form/SV_1zccezoNm8UGOrA";
+
 // Initialize jsPsych
 const jsPsych = initJsPsych({
     on_finish: function () {
         console.log(jsPsych.data.get().csv());
     }
 });
+
+const urlParams = new URLSearchParams(window.location.search);
+const prolificPID = urlParams.get('PROLIFIC_PID') || urlParams.get('prolific_pid') || urlParams.get('pid') || null;
+const prolificStudyID = urlParams.get('STUDY_ID') || urlParams.get('study_id') || null;
+const prolificSessionID = urlParams.get('SESSION_ID') || urlParams.get('session_id') || null;
 
 const timeline = [];
 
@@ -133,7 +141,7 @@ timeline.push({
         ">
             <p>In this task, you will complete a series of activities that involve solving math problems and remembering letters.</p>
 
-            <p>On each trial, you will first see a simple math problem. Solve the problem as quickly and accurately as you can. You will then be shown a proposed answer and asked whether the answ[...]
+            <p>On each trial, you will first see a simple math problem. Solve the problem as quickly and accurately as you can. You will then be shown a proposed answer and asked whether the answer is correct.</p>
 
             <p>After making your decision, a letter will appear on the screen. Remember the letter and its position in the sequence.</p>
 
@@ -166,9 +174,12 @@ timeline.push({
             padding: 20px;
         ">
         <h2>Letter Practice</h2>
-        <p>Get ready.</p>
+        <p>In this portion of the task, you will be shown a series of letters on the screen.</p>
+        <p>Your job is to remember the letters in the order presented.</p>
+        <p>To record your answer, you will select the letters you saw from a grid of letters in the order in which they were presented.</p>
+        <p>Click the button below to continue.</p>
     `,
-    choices:["Begin"]
+    choices:["Continue"]
 });
 
 // =====================================================
@@ -336,7 +347,7 @@ timeline.push({
     <h2>Math Practice</h2>
     <p>First, a math problem will appear on the screen. Solve the problem as quickly and accurately as you can. When you have solved it, click the mouse to continue.</p>
     <p>You will then see a proposed answer. Decide whether the proposed answer is <strong>True</strong> or <strong>False</strong>.</p>
-    <p>Try to respond both quickly and accurately.</p>
+    <p>Try to respond to both quickly and accurately.</p>
   `,
   choices: ['Continue']
 });
@@ -428,8 +439,7 @@ timeline.push({
     return `
       <h2>Math Practice Summary</h2>
       <p>Your mean solve time was <strong>${Math.round(mean)} ms</strong> (SD ${Math.round(sd)} ms).</p>
-      <p>During the main task the per-problem maximum solve time will be set to <strong>${maxMs} ms</strong> (mean + 2.5 × SD).</p>
-    `;
+     `;
   },
   choices: ['Continue'],
   data: { practice: true, practiceType: 'math_summary' }
@@ -464,7 +474,7 @@ timeline.push({
     <p>Now you will practice the full task.</p>
     <p>On each trial, you will first solve a math problem and decide whether the proposed answer is <strong>True</strong> or <strong>False</strong>.
     <p>After making that decision, you will see a letter appear on the screen. </p>
-    <p>This sequence of math problem and then letter will repeat several times. After the last letter, the grid will appear and you should recall the letters you saw in the order in whcih they ap[...]
+    <p>This sequence of math problem and then letter will repeat several times. After the last letter, the grid will appear and you should recall the letters you saw in the order in which they appeared.</p>
     <p>Remember: <strong>do your best to solve the math problems quickly and accurately while also remembering the letters.</strong></p>
   `,
   choices: ['Continue']
@@ -550,7 +560,7 @@ for (let p=0; p<3; p++){
     data: { practice: true, practiceType: 'combined_feedback' }
   });
 
-  timeline.push({ type: jsPsychHtmlButtonResponse, stimulus: '<p>Short break before the next practice trial.</p>', choices: ['Continue'], data: { practice: true } });
+  timeline.push({ type: jsPsychHtmlButtonResponse, stimulus: '<p>Press continue when you are ready to begin the next trial.</p>', choices: ['Continue'], data: { practice: true } });
 }
 
 timeline.push({
@@ -580,7 +590,10 @@ timeline.push({
 window.spans = jsPsych.randomization.shuffle([3,4,5,6,7]);
 console.log('Block order (spans):', window.spans);
 
-for (const span of window.spans){
+for (let blockIndex = 0; blockIndex < window.spans.length; blockIndex++){
+    const span = window.spans[blockIndex];
+    const isLastBlock = (blockIndex === window.spans.length - 1);
+
     // Block start screen
     timeline.push({
         type: jsPsychHtmlButtonResponse,
@@ -604,11 +617,13 @@ for (const span of window.spans){
         },
         choices: "NO_KEYS",
         trial_duration:null,
+        data: { practice: false },
         on_load:function(){
             initializeRecallGrid(function(responses){
                 const score = scoreRecall(blockTrial.letters, responses);
 
                 jsPsych.finishTrial({
+                    practice: false,
                     span: blockTrial.letters.length,
                     presentedLetters: blockTrial.letters,
                     recalledLetters: responses,
@@ -632,12 +647,14 @@ for (const span of window.spans){
         choices:["Continue"]
     });
 
-    // Short break
-    timeline.push({
-        type: jsPsychHtmlButtonResponse,
-        stimulus: `<p>Short break. Press Continue when ready for the next block.</p>`,
-        choices:["Continue"]
-    });
+    // Short break — only if NOT the last block
+    if (!isLastBlock) {
+        timeline.push({
+            type: jsPsychHtmlButtonResponse,
+            stimulus: `<p>Press Continue when ready for the next block.</p>`,
+            choices:["Continue"]
+        });
+    }
 }
 
 // =====================================================
@@ -662,6 +679,7 @@ function createMathTimeline(problem){
             `,
             choices: "NO_KEYS",
             response_ends_trial: false,
+            data: { practice: false },
             on_load: function(){
                 setTimeout(function(){
                     document.addEventListener("click", advanceMathScreen);
@@ -687,6 +705,7 @@ function createMathTimeline(problem){
             `,
             choices:["True","False"],
             data:{
+                practice: false,
                 correct: problem.isTrue
             },
             on_finish:function(data){
@@ -741,14 +760,10 @@ function computeOSPANScores(){
 timeline.push({
   type: jsPsychHtmlButtonResponse,
   stimulus: function(){
-    const scores = computeOSPANScores();
     return `
       <div class="aospan-center">
         <h2>Task complete</h2>
         <p>Thank you for completing the experiment.</p>
-        <p>OSPAN score (absolute): <strong>${scores.oscore}</strong></p>
-        <p>Total letters correct: <strong>${scores.totalCorrect}</strong></p>
-        <p>Math errors: <strong>${scores.mathErrors}</strong> (speed: ${scores.speedErrors}, accuracy: ${scores.accuracyErrors})</p>
         <p>Press Finish to continue.</p>
       </div>
     `;
@@ -756,19 +771,27 @@ timeline.push({
   choices: ['Finish'],
   on_finish: function(){
     const scores = computeOSPANScores();
+    console.log('OSPAN results:', scores);
+
+    const params = new URLSearchParams();
+
+    if (prolificPID) params.set('PROLIFIC_PID', prolificPID);
+    if (prolificStudyID) params.set('STUDY_ID', prolificStudyID);
+    if (prolificSessionID) params.set('SESSION_ID', prolificSessionID);
+
+    params.set('OSPAN_abs', scores.oscore);
+    params.set('OSPAN_totalCorrect', scores.totalCorrect);
+    params.set('OSPAN_mathErrors', scores.mathErrors);
+    params.set('OSPAN_speedErrors', scores.speedErrors);
+    params.set('OSPAN_accuracyErrors', scores.accuracyErrors);
+
     // Redirect to Qualtrics return URL with embedded-data query params
     if (typeof window.qualtricsReturnUrl === 'string' && window.qualtricsReturnUrl.length > 0){
-      const params = new URLSearchParams();
-      params.set('OSPAN_abs', scores.oscore);
-      params.set('OSPAN_totalCorrect', scores.totalCorrect);
-      params.set('OSPAN_mathErrors', scores.mathErrors);
-      params.set('OSPAN_speedErrors', scores.speedErrors);
-      params.set('OSPAN_accuracyErrors', scores.accuracyErrors);
-
       const sep = window.qualtricsReturnUrl.includes('?') ? '&' : '?';
       window.location.href = window.qualtricsReturnUrl + sep + params.toString();
     } else {
-      console.log('OSPAN results:', scores);
+      console.log('No Qualtrics return URL set');
+      console.log('Qualtrics params:', Object.fromEntries(params.entries()));
     }
   }
 });
