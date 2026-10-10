@@ -4,11 +4,12 @@
 <head>
 
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <title>Automated Shortened OSPAN</title>
+    <title>Symmetry Span</title>
 
     <!-- jsPsych CSS -->
-    <link href="jspsych/css/jspsych.css" rel="stylesheet">
+    <link href="jspsych/jspsych.css" rel="stylesheet">
 
     <!-- Your stylesheet -->
     <link href="style.css" rel="stylesheet">
@@ -20,15 +21,18 @@
     <!-- jsPsych -->
     <script src="jspsych/jspsych.js"></script>
 
-    <!-- Plugins -->
-<script src="jspsych/plugin-html-button-response.js"></script>
-<script src="jspsych/plugin-html-keyboard-response.js"></script>
+    <!-- Plugins used by the task -->
+    <script src="jspsych/plugin-html-button-response.js"></script>
+    <script src="jspsych/plugin-html-keyboard-response.js"></script>
 
-    <!-- OSPAN Modules -->
+    <!-- Reusable task generation, rendering, and scoring -->
+    <script src="modules/symmetrySpan.js"></script>
+
+    <!-- Spatial recall module -->
     <script src="modules/recallGrid.js"></script>
 
-    <!-- Main Experiment (cache-busted) -->
-    <script src="experiment.js?v=20260807T1535"></script>
+    <!-- Main experiment -->
+    <script src="experiment.js"></script>
 
 </body>
 

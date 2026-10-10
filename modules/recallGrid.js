@@ -1,240 +1,115 @@
-// =====================================================
-// Automated Shortened OSPAN
-// Recall Grid Module
-// Version 0.2
-// =====================================================
-
-// Letters in the original Foster et al. grid
-const LETTERS = [
-    "F","H","J","K",
-    "L","N","P","Q",
-    "R","S","T","Y"
-];
-
-// Stores the participant's responses
 let recallResponses = [];
+let recallResponseEvents = [];
+let recallFinishCallback = null;
+let recallTargetCount = 0;
+let recallStartedAt = 0;
+let recallSubmitted = false;
+let recallRoot = null;
 
-// Function to call when Enter is pressed
-let finishCallback = null;
+function createRecallGrid(targetCount) {
+  const count = Number.isInteger(targetCount) && targetCount > 0 ? targetCount : 1;
+  const cells = Array.from({ length: 16 }, (_, index) =>
+    `<button class="recall-cell" type="button" data-position="${index}" aria-label="Row ${Math.floor(index / 4) + 1}, column ${index % 4 + 1}"></button>`
+  ).join("");
 
-
-// -----------------------------------------------------
-// Build the HTML
-// -----------------------------------------------------
-
-function createRecallGrid() {
-
-    let html = "";
-
-    html += `
-    <div class="recall-panel">
-
-        <h2>Recall</h2>
-
-        <p class="instructions">
-            Select the letters in the order they were presented.
-            If you forgot a letter, press Blank.
-        </p>
-
-        <div class="letter-grid">
-    `;
-
-    LETTERS.forEach(letter => {
-
-        html += `
-        <div class="letter-cell">
-
-            <div
-                class="number-box"
-                id="box-${letter}"
-                data-letter="${letter}">
-            </div>
-
-            <div class="letter">
-                ${letter}
-            </div>
-
-        </div>
-        `;
-
-    });
-
-    html += `
-        </div>
-
-        <div
-            id="responseString"
-            class="response-string">
-        </div>
-
-        <div class="button-row">
-
-            <button id="clearBtn">
-
-                Clear
-
-            </button>
-
-            <button id="blankBtn">
-
-                Blank
-
-            </button>
-
-            <button
-                id="enterBtn"
-                disabled>
-
-                Enter
-
-            </button>
-
-        </div>
-
-    </div>
-    `;
-
-    return html;
-
+  return `
+    <section class="recall-panel">
+      <h2>Recall the square locations</h2>
+      <p class="instructions">Select the locations in the order they appeared. Select Blank when you cannot remember a location. You need ${count} response${count === 1 ? "" : "s"}.</p>
+      <div class="recall-grid" role="group" aria-label="Four by four recall grid">${cells}</div>
+      <p id="recallResponseString" class="response-string" aria-live="polite"></p>
+      <div class="button-row">
+        <button id="clearRecallBtn" type="button">Clear</button>
+        <button id="blankRecallBtn" type="button">Blank</button>
+        <button id="submitRecallBtn" type="button" disabled>Submit</button>
+      </div>
+    </section>
+  `;
 }
 
+function initializeRecallGrid(targetCount, callback) {
+  if (!Number.isInteger(targetCount) || targetCount < 1 || targetCount > 16) {
+    throw new Error("Recall grid target count must be an integer from 1 to 16.");
+  }
+  if (typeof callback !== "function") {
+    throw new Error("Recall grid requires a completion callback.");
+  }
 
+  recallResponses = [];
+  recallResponseEvents = [];
+  recallTargetCount = targetCount;
+  recallFinishCallback = callback;
+  recallStartedAt = performance.now();
+  recallSubmitted = false;
+  recallRoot = document.querySelector(".recall-panel");
+  if (!recallRoot) {
+    throw new Error("Recall grid panel is missing from the document.");
+  }
 
-// -----------------------------------------------------
-// Initialize after the page loads
-// -----------------------------------------------------
-
-function initializeRecallGrid(callback){
-
-    finishCallback = callback;
-
-    recallResponses = [];
-
-    LETTERS.forEach(letter=>{
-
-        document
-            .getElementById(`box-${letter}`)
-            .addEventListener("click",function(){
-
-                addLetter(letter);
-
-            });
-
-    });
-
-    document
-        .getElementById("clearBtn")
-        .addEventListener("click",clearRecall);
-
-    document
-        .getElementById("blankBtn")
-        .addEventListener("click",blankRecall);
-
-    document
-        .getElementById("enterBtn")
-        .addEventListener("click",submitRecall);
-
+  recallRoot.querySelectorAll(".recall-cell").forEach(cell => {
+    cell.addEventListener("click", () => addRecallResponse(Number(cell.dataset.position)));
+  });
+  recallRoot.querySelector("#clearRecallBtn").addEventListener("click", clearRecall);
+  recallRoot.querySelector("#blankRecallBtn").addEventListener("click", addBlankResponse);
+  recallRoot.querySelector("#submitRecallBtn").addEventListener("click", submitRecall);
+  updateRecallGrid();
 }
 
-
-
-// -----------------------------------------------------
-// Add a letter
-// -----------------------------------------------------
-
-function addLetter(letter){
-
-    if(recallResponses.includes(letter))
-        return;
-
-    recallResponses.push(letter);
-
-    updateDisplay();
-
+function addRecallResponse(position) {
+  if (recallResponses.length >= recallTargetCount ||
+      recallResponses.includes(position) ||
+      !Number.isInteger(position) || position < 0 || position > 15) {
+    return;
+  }
+  recordRecallResponse(position);
 }
 
-
-
-// -----------------------------------------------------
-// Blank button
-// -----------------------------------------------------
-
-function blankRecall(){
-
-    recallResponses.push("_");
-
-    updateDisplay();
-
+function addBlankResponse() {
+  if (recallResponses.length < recallTargetCount) {
+    recordRecallResponse(null);
+  }
 }
 
-
-
-// -----------------------------------------------------
-// Clear button
-// -----------------------------------------------------
-
-function clearRecall(){
-
-    recallResponses = [];
-
-    updateDisplay();
-
+function recordRecallResponse(position) {
+  recallResponses.push(position);
+  recallResponseEvents.push({
+    order: recallResponses.length,
+    position,
+    timestampMs: Math.round(performance.now() - recallStartedAt)
+  });
+  updateRecallGrid();
 }
 
-
-
-// -----------------------------------------------------
-// Refresh screen
-// -----------------------------------------------------
-
-function updateDisplay(){
-
-    LETTERS.forEach(letter=>{
-
-        const box =
-            document.getElementById(`box-${letter}`);
-
-        const index =
-            recallResponses.indexOf(letter);
-
-        if(index === -1){
-
-            box.innerHTML = "";
-
-        }
-
-        else{
-
-            box.innerHTML = index + 1;
-
-        }
-
-    });
-
-    document
-        .getElementById("responseString")
-        .innerHTML =
-        recallResponses.join(" ");
-
-    document
-        .getElementById("enterBtn")
-        .disabled =
-        recallResponses.length === 0;
-
+function clearRecall() {
+  recallResponses = [];
+  recallResponseEvents = [];
+  updateRecallGrid();
 }
 
+function updateRecallGrid() {
+  recallRoot.querySelectorAll(".recall-cell").forEach(cell => {
+    const position = Number(cell.dataset.position);
+    const responseIndex = recallResponses.indexOf(position);
+    cell.textContent = responseIndex === -1 ? "" : String(responseIndex + 1);
+    cell.classList.toggle("is-selected", responseIndex !== -1);
+    cell.disabled = recallResponses.length >= recallTargetCount || responseIndex !== -1;
+  });
 
+  const display = recallRoot.querySelector("#recallResponseString");
+  display.textContent = recallResponses.map(position =>
+    position === null ? "Blank" : `R${Math.floor(position / 4) + 1}C${position % 4 + 1}`
+  ).join(" → ");
+  recallRoot.querySelector("#blankRecallBtn").disabled = recallResponses.length >= recallTargetCount;
+  recallRoot.querySelector("#submitRecallBtn").disabled = recallResponses.length !== recallTargetCount;
+}
 
-// -----------------------------------------------------
-// Finish trial
-// -----------------------------------------------------
-
-function submitRecall(){
-
-    if(finishCallback){
-
-        finishCallback([...recallResponses]);
-
-    }
-
+function submitRecall() {
+  if (!recallSubmitted && recallResponses.length === recallTargetCount && recallFinishCallback) {
+    recallSubmitted = true;
+    recallFinishCallback(
+      [...recallResponses],
+      recallResponseEvents.map(event => ({ ...event })),
+      Math.round(performance.now() - recallStartedAt)
+    );
+  }
 }
