@@ -74,22 +74,26 @@
   assert(mainSymmetry.length === 4 && mainCategories === 2 &&
     mainSymmetry.length - mainCategories === 2,
   "main symmetry trials are balanced and labeled non-practice");
-  const symmetryPractice = trialRows.filter(row => row.phase === "symmetry-only" &&
+
+  const gridPractice = trialRows.filter(row => row.phase === "grid-practice" &&
+    row.trialType === "recall" && row.practice === true);
+  assert(gridPractice.length === 5,
+  "grid practice contains exactly five labeled recall trials");
+
+  const symmetryPractice = trialRows.filter(row => row.phase === "symmetry-practice" &&
     row.trialType === "symmetry" && row.practice === true);
+  assert(symmetryPractice.length === 15,
+  "symmetry practice contains exactly fifteen labeled trials");
   const practiceSymmetryCount = symmetryPractice.filter(row => row.correctAnswer).length;
-  assert(symmetryPractice.length === 3 &&
-    Math.abs(practiceSymmetryCount - (symmetryPractice.length - practiceSymmetryCount)) === 1,
-  "symmetry-only practice contains three labeled trials with the documented 2/1 balance");
-  assert(symmetryPractice.every(row => row.taskType === "symmetry-only") &&
-    trialRows.filter(row => row.phase === "memory-only" && row.trialType === "recall")
-      .every(row => row.taskType === "memory-only") &&
+  assert(symmetryPractice.every(row => row.taskType === "symmetry-practice") &&
+    gridPractice.every(row => row.taskType === "grid-memory-practice") &&
     mainSymmetry.every(row => row.taskType === "combined") &&
     trialRows.filter(row => row.phase === "main" && row.trialType === "memory-presentation")
       .every(row => row.taskType === "combined"),
-  "trial metadata distinguishes symmetry-only, memory-only, and combined tasks");
-  assert(trialRows.filter(row => row.phase === "memory-only" &&
-    row.trialType === "recall" && row.practice === true).length === 3,
-  "memory-only practice contains three correctly labeled recall trials");
+  "trial metadata distinguishes practice, grid-practice, and combined task types");
+  assert(trialRows.filter(row => row.phase === "grid-practice" &&
+    row.trialType === "recall" && row.practice === true).length === 5,
+  "grid memory practice contains five correctly labeled recall trials");
   assert(mainPracticeFlags &&
     trialRows.filter(row => row.phase === "main" && row.trialType === "recall")
       .every(row => row.practice === false),
@@ -116,9 +120,20 @@
   trialRows.forEach(row => {
     if (row.phase && !phaseOrder.includes(row.phase)) phaseOrder.push(row.phase);
   });
-  assert(["welcome", "symmetry-only", "memory-only", "combined-practice", "main", "completion"]
-    .every((phase, index) => phaseOrder[index] === phase),
-  "timeline phases occur in the required order");
+  const expectedPhaseOrder = [
+    "welcome",
+    "grid-practice-instructions-1",
+    "grid-practice-instructions-2",
+    "grid-practice",
+    "symmetry-practice-instructions",
+    "symmetry-practice",
+    "symmetry-practice-feedback",
+    "combined-practice",
+    "main",
+    "completion"
+  ];
+  assert(expectedPhaseOrder.every((phase, index) => phaseOrder[index] === phase),
+    "timeline phases occur in the required order");
 
   const mainSequenceIds = [...new Set(mainSymmetry.map(row => row.sequenceId))];
   const mainAlternationValid = mainSequenceIds.every(sequenceId => {
@@ -169,6 +184,15 @@
   "recall response order, reaction time, and single-submit handler are recorded");
   assert(mount.querySelectorAll(".recall-cell").length === 16,
     "recall grid contains exactly 16 locations");
+  const blankCell = mount.querySelectorAll(".recall-cell")[0];
+  blankCell.click();
+  mount.querySelector("#blankRecallBtn").click();
+  assert(mount.querySelector("#recallResponseString").textContent.includes("Blank") &&
+    mount.querySelector("#submitRecallBtn").disabled === false,
+  "blank response records a missing answer in the correct position without advancing automatically");
+  mount.querySelector("#clearRecallBtn").click();
+  assert(mount.querySelector("#recallResponseString").textContent === "",
+  "clear resets recall selections");
   mount.remove();
 
   const finalResult = document.createElement("p");
