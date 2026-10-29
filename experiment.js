@@ -53,7 +53,7 @@ function validateConfig() {
 function addInstructions(title, paragraphs, phase, button = "Continue") {
   timeline.push({
     type: jsPsychHtmlButtonResponse,
-    stimulus: `<section class="instruction-panel"><h1>${title}</h1>${paragraphs.map(text => `<p>${text}</p>`).join("")}</section>`,
+    stimulus: `<section class="instruction-panel instruction-page"><div class="instruction-content"><h1>${title}</h1>${paragraphs.map(text => `<p>${text}</p>`).join("")}</div></section>`,
     choices: [button],
     data: { phase, trialType: "instruction", screen: title }
   });
@@ -82,7 +82,7 @@ function addSymmetryTrial({
     data: {
       trialId,
       trialType: "symmetry",
-      taskType: phase === "symmetry-only" ? "symmetry-only" : "combined",
+      taskType: phase === "symmetry-practice" ? "symmetry-practice" : "combined",
       phase,
       practice,
       sequenceId,
@@ -93,9 +93,15 @@ function addSymmetryTrial({
       correctAnswerLabel: correctAnswer ? "Symmetrical" : "Not Symmetrical"
     },
     on_finish: function (data) {
-      data.participantResponse = data.response === 0 ? "Symmetrical" :
-        data.response === 1 ? "Not Symmetrical" : null;
-      data.accuracy = data.participantResponse === data.correctAnswerLabel;
+      const responseIndex = Number.isInteger(data.response) ? data.response : null;
+      const participantResponse = responseIndex === 0 ? "Symmetrical" :
+        responseIndex === 1 ? "Not Symmetrical" : null;
+      data.participantResponse = participantResponse;
+      data.task_type = data.taskType;
+      data.trial_id = data.trialId;
+      data.correct_response = data.correctAnswerLabel;
+      data.accuracy = participantResponse === data.correctAnswerLabel;
+      data.rt = Number.isFinite(data.rt) ? Number(data.rt) : null;
     }
   });
 
@@ -191,6 +197,12 @@ function addRecallTrial(sequence, details) {
           responseOrder,
           recallReactionTime,
           recallStartedAt: new Date(Date.now() - (performance.now() - recallOnset)).toISOString(),
+          task_type: details.taskType,
+          trial_id: trialId,
+          correct_response: sequence,
+          response: selected,
+          accuracy: Number(scores.exactSequenceAccuracy),
+          rt: recallReactionTime,
           ...scores
         });
       });
@@ -225,6 +237,26 @@ function addRecallFeedback(phase) {
   });
 }
 
+function addGridPracticeTrial() {
+  const sequence = task.generateMemorySequence(2);
+  const sequenceId = `grid-practice-sequence-${nextSequenceId++}`;
+  sequence.forEach((position, index) => addMemoryPresentation(position, {
+    practice: true,
+    phase: "grid-practice",
+    taskType: "grid-memory-practice",
+    sequenceId,
+    sequenceLength: sequence.length,
+    sequenceIndex: index + 1
+  }));
+  addRecallTrial(sequence, {
+    practice: true,
+    phase: "grid-practice",
+    taskType: "grid-memory-practice",
+    sequenceId
+  });
+  addRecallFeedback("grid-practice");
+}
+
 function addCombinedTrial(sequenceLength, options) {
   const sequence = task.generateMemorySequence(sequenceLength);
   const sequenceId = `sequence-${nextSequenceId++}`;
@@ -240,7 +272,6 @@ function addCombinedTrial(sequenceLength, options) {
       phase: options.phase,
       isSymmetric,
       showFeedback: false,
-      taskType: "combined",
       sequenceId,
       sequenceLength,
       sequenceIndex: index + 1
@@ -299,7 +330,7 @@ function addCompletionTrial() {
     type: jsPsychHtmlButtonResponse,
     stimulus: function () {
       const csvUrl = createTrialDataCsvUrl();
-      return `<section class="feedback-panel"><h1>Task complete</h1><p>Thank you for completing the Symmetry Span task.</p><p><a class="jspsych-btn csv-download-link" href="${csvUrl}" download="symmetry-span-trial-data.csv">Download trial data (CSV)</a></p><p>Save the CSV before pressing Finish to continue.</p></section>`;
+      return `<section class="feedback-panel"><h1>Task complete</h1><p>Thank you for completing the Symmetry Span task.</p><p><a class="jspsych-btn csv-download-link" href="${csvUrl}" download="symmetry-span-trial-data.csv">Download trial data</a></p></section>`;
     },
     choices: ["Finish"],
     data: { phase: "completion", trialType: "completion" },
@@ -316,31 +347,79 @@ function addCompletionTrial() {
   });
 }
 
+function addSymmetryPracticeFeedback() {
+  timeline.push({
+    type: jsPsychHtmlButtonResponse,
+    stimulus: function () {
+      const practiceRows = jsPsych.data.get().values().filter(row =>
+        row.phase === "symmetry-practice" &&
+        row.trialType === "symmetry" &&
+        row.practice === true &&
+        typeof row.accuracy === "boolean"
+      );
+      const validCount = practiceRows.length;
+      const correctCount = practiceRows.filter(row => row.accuracy).length;
+      const accuracyPercent = validCount ? Math.round((correctCount / validCount) * 100) : 0;
+      const validRtRows = practiceRows.filter(row => Number.isFinite(row.rt) && row.rt >= 0);
+      const meanSolveTime = validRtRows.length
+        ? validRtRows.reduce((sum, row) => sum + Number(row.rt), 0) / validRtRows.length
+        : null;
+
+      const accuracyText = validCount
+        ? `Your accuracy during the Symmetry practice was ${correctCount} out of ${validCount} (${accuracyPercent}%).`
+        : "Your accuracy during the Symmetry practice was unavailable because no valid practice responses were recorded.";
+      const meanSolveText = Number.isFinite(meanSolveTime) && meanSolveTime >= 0
+        ? `Mean solve time: ${Math.round(meanSolveTime).toLocaleString()} ms`
+        : "Mean solve time: unavailable";
+
+      return `<section class="feedback-panel"><h2>Symmetry Practice Accuracy</h2><p>${accuracyText}</p><p>${meanSolveText}</p><p>In the main task you’ll be asked to respond quickly and accurately. Please try to keep accuracy high.</p></section>`;
+    },
+    choices: ["Continue"],
+    data: { phase: "symmetry-practice-feedback", trialType: "symmetry-practice-feedback" }
+  });
+}
+
 validateConfig();
 
-addInstructions("Welcome to Symmetry Span", [
-  "This task measures how well you remember the locations of squares while making Symmetry Judgments.",
-  "For each item, decide whether an 8 × 8 binary grid is Symmetrical across its vertical axis. Then remember the location of the highlighted square in a 4 × 4 grid.",
-  "After each sequence, select all remembered locations in the order they appeared. The recall grid will not show the correct locations.",
-  "You will first complete Practice trials for each task separately."
+addInstructions("Symmetry Span", [
+  "In this task, you will complete a series of activities that involve assessing symmetry and remembering grid cells.",
+  "On each trial, you will first see a grid that is either symmetrical or not symmetrical along its vertical axis. Solve the problem as quickly and accurately as you can by selecting Symmetrical or Not Symmetrical.",
+  "After making your decision, a grid with a shaded cell will appear on the screen. Remember the shaded cell and its position in the sequence.",
+  "You will repeat this process several times. At the end of each sequence, you will be asked to recall the shaded cells in the order in which they appeared.",
+  "We will now practice both the symmetry and grid portions of the task separately. The practice activities are designed to help you become familiar with each part of the task."
 ], "welcome");
 
+addInstructions("Grid Practice", [
+  "In this portion of the task, you will be shown a series of shaded grid cells on the screen.",
+  "Your job is to remember the cells in the order presented.",
+  "To record your answer, you will select the cells you saw from a blank grid in the order in which they were presented.",
+  "Click the button below to continue."
+], "grid-practice-instructions-1");
+
+addInstructions("Grid Practice", [
+  "If you cannot remember a grid cell for a particular position, click the Blank button.",
+  "Use the Blank button only when you do not remember the grid cell for that position. You can still enter grid cell for the other positions.",
+  "If you make a mistake, you can use the Clear button to clear your responses and start over."
+], "grid-practice-instructions-2");
+
+for (let i = 0; i < 5; i++) addGridPracticeTrial();
+
 addInstructions("Symmetry Practice", [
-  "Judge whether each 8 × 8 grid is Symmetrical across its vertical axis. There are three Practice trials, so the categories cannot be evenly balanced."
-], "symmetry-only", "Begin Practice");
-const symmetryPracticeTypes = task.shuffle([true, false, Math.random() < 0.5]);
+  "In this portion of the task, you will be shown a series of shaded grids on the screen.",
+  "Your job is to assess whether the grid is symmetrical or not symmetrical along its vertical axis.",
+  "To record your answer, you will select either Symmetrical or Not Symmetrical.",
+  "Click the button below to continue."
+], "symmetry-practice-instructions");
+
+const symmetryPracticeTypes = Array.from({ length: 15 }, () => Math.random() < 0.5);
 symmetryPracticeTypes.forEach(isSymmetric => addSymmetryTrial({
   practice: true,
-  phase: "symmetry-only",
+  phase: "symmetry-practice",
   isSymmetric,
-  showFeedback: true
+  showFeedback: false
 }));
 
-addInstructions("Spatial Memory Practice", [
-  "Each square in a 4 × 4 grid is shown briefly, one at a time. Remember each location and select them in order.",
-  "There are three Practice sequences. You will see feedback about how many locations you recalled in the correct positions."
-], "memory-only", "Begin Practice");
-for (let i = 0; i < 3; i++) addMemoryOnlyTrial();
+addSymmetryPracticeFeedback();
 
 addInstructions("Combined Practice", [
   "A Symmetry Judgment will alternate with each highlighted memory square. At the end of the sequence, recall every location in the order presented."
