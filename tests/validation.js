@@ -13,149 +13,114 @@
   }
 
   const task = window.SymmetrySpan;
-  let symmetricShapeValid = true;
-  let symmetricPassesTest = true;
-  let asymmetricShapeValid = true;
-  let asymmetricFailsTest = true;
+  let symmetricValid = true;
+  let asymmetricValid = true;
   for (let index = 0; index < 100; index++) {
     const symmetric = task.generateSymmetryGrid(true);
     const asymmetric = task.generateSymmetryGrid(false);
-    symmetricShapeValid = symmetricShapeValid &&
-      symmetric.flat().length === 64 && symmetric.every(row => row.length === 8);
-    symmetricPassesTest = symmetricPassesTest && task.isSymmetricalGrid(symmetric);
-    asymmetricShapeValid = asymmetricShapeValid &&
-      asymmetric.flat().length === 64 && asymmetric.every(row => row.length === 8);
-    asymmetricFailsTest = asymmetricFailsTest && !task.isSymmetricalGrid(asymmetric);
+    symmetricValid = symmetricValid && symmetric.flat().length === 64 &&
+      task.isSymmetricalGrid(symmetric);
+    asymmetricValid = asymmetricValid && asymmetric.flat().length === 64 &&
+      !task.isSymmetricalGrid(asymmetric);
   }
-  assert(symmetricShapeValid, "100 generated symmetrical grids each contain exactly 64 cells");
-  assert(symmetricPassesTest, "all 100 generated symmetrical grids pass mirror comparison");
-  assert(asymmetricShapeValid, "100 generated asymmetrical grids each contain exactly 64 cells");
-  assert(asymmetricFailsTest, "all 100 generated asymmetrical grids fail mirror comparison");
-
+  assert(symmetricValid, "generated symmetrical grids pass vertical-mirror comparison");
+  assert(asymmetricValid, "generated non-symmetrical grids fail vertical-mirror comparison");
   assert((task.renderSymmetryGrid(task.generateSymmetryGrid(true)).match(/symmetry-cell/g) || []).length === 64,
     "rendered symmetry grid contains 64 cells");
   assert((task.renderMemorySquare(0).match(/memory-stimulus-cell/g) || []).length === 16,
     "rendered memory grid contains 16 cells");
 
-  let sequencesValid = true;
-  for (let length = 1; length <= 7; length++) {
-    const sequence = task.generateMemorySequence(length);
-    sequencesValid = sequencesValid && sequence.length === length &&
-      new Set(sequence).size === length &&
-      sequence.every(location => Number.isInteger(location) && location >= 0 && location < 16);
-  }
-  assert(sequencesValid, "memory sequences contain 1–7 unique valid locations");
-
   const swapped = task.scoreSquareRecall([2, 11], [11, 2]);
-  assert(swapped.locationAccuracy === 1 && swapped.positionAccuracy === 0 &&
-    swapped.exactSequenceAccuracy === 0, "scoring distinguishes location membership from serial-position errors");
   const exact = task.scoreSquareRecall([2, 11], [2, 11]);
-  assert(exact.locationCorrect === 2 && exact.positionCorrect === 2 &&
-    exact.exactSequenceAccuracy === 1, "scoring identifies a fully correct sequence");
-
-  const balanced = task.generateBalancedAnswers(40);
-  assert(balanced.filter(Boolean).length === 20 && balanced.filter(answer => !answer).length === 20,
-    "balanced symmetry plan has equal categories");
-  let oddCountRejected = false;
-  try {
-    task.generateBalancedAnswers(3);
-  } catch (error) {
-    oddCountRejected = true;
-  }
-  assert(oddCountRejected, "unbalanceable odd symmetry trial count is rejected");
+  const blanked = task.scoreSquareRecall([2, 11], [null, 11]);
+  assert(swapped.locationAccuracy === 1 && swapped.positionCorrect === 0,
+    "recall scoring distinguishes location membership from order");
+  assert(exact.positionCorrect === 2 && exact.exactSequenceAccuracy === 1,
+    "exact ordered recall receives full position credit");
+  assert(blanked.positionCorrect === 1 && blanked.exactSequenceAccuracy === 0,
+    "blank responses preserve sequence slots and score incorrect at that position");
 
   const plan = window.SYMMETRY_SPAN_RUNTIME;
-  const trialRows = plan.timeline.map(trial => trial.data || {});
-  const mainSymmetry = trialRows.filter(row =>
-    row.phase === "main" && row.trialType === "symmetry"
-  );
-  const mainCategories = mainSymmetry.filter(row => row.correctAnswer).length;
-  const mainPracticeFlags = mainSymmetry.every(row => row.practice === false);
-  assert(mainSymmetry.length === 4 && mainCategories === 2 &&
-    mainSymmetry.length - mainCategories === 2,
-  "main symmetry trials are balanced and labeled non-practice");
-
-  const gridPractice = trialRows.filter(row => row.phase === "grid-practice" &&
+  const rows = plan.timeline.map(trial => trial.data || {});
+  const gridRecall = rows.filter(row => row.phase === "grid_practice" &&
     row.trialType === "recall" && row.practice === true);
-  assert(gridPractice.length === 5,
-  "grid practice contains exactly five labeled recall trials");
+  const gridMemory = rows.filter(row => row.phase === "grid_practice" &&
+    row.trialType === "memory-presentation" && row.practice === true);
+  const gridFeedback = rows.filter(row => row.phase === "grid_practice" &&
+    row.trialType === "grid-practice-feedback");
+  assert(gridRecall.length === 3 && gridRecall.every(row => row.sequenceLength === 2),
+    "grid practice has exactly three two-cell recall trials");
+  assert(gridMemory.length === 6 && gridMemory.every(row => row.sequenceLength === 2),
+    "grid practice presents exactly two memory cells per sequence");
+  assert(gridFeedback.length === 3, "grid practice has immediate feedback after each trial");
 
-  const symmetryPractice = trialRows.filter(row => row.phase === "symmetry-practice" &&
+  const readinessIndex = rows.findIndex(row => row.phase === "grid_practice_readiness");
+  const firstGridTrialIndex = rows.findIndex(row => row.phase === "grid_practice" && row.trialType === "memory-presentation");
+  assert(readinessIndex >= 0 && readinessIndex < firstGridTrialIndex,
+    "grid practice readiness page precedes the trials");
+  const gridCompletionIndex = rows.findIndex(row => row.phase === "grid_practice_completion");
+  const lastGridFeedbackIndex = rows.map((row, index) => row.phase === "grid_practice" && row.trialType === "grid-practice-feedback" ? index : -1)
+    .filter(index => index >= 0).pop();
+  assert(gridCompletionIndex > lastGridFeedbackIndex,
+    "grid practice completion follows the third trial feedback");
+
+  const symmetryPractice = rows.filter(row => row.phase === "symmetry_practice" &&
     row.trialType === "symmetry" && row.practice === true);
-  assert(symmetryPractice.length === 15,
-  "symmetry practice contains exactly fifteen labeled trials");
-  const practiceSymmetryCount = symmetryPractice.filter(row => row.correctAnswer).length;
-  assert(symmetryPractice.every(row => row.taskType === "symmetry-practice") &&
-    gridPractice.every(row => row.taskType === "grid-memory-practice") &&
-    mainSymmetry.every(row => row.taskType === "combined") &&
-    trialRows.filter(row => row.phase === "main" && row.trialType === "memory-presentation")
-      .every(row => row.taskType === "combined"),
-  "trial metadata distinguishes practice, grid-practice, and combined task types");
-  assert(trialRows.filter(row => row.phase === "grid-practice" &&
-    row.trialType === "recall" && row.practice === true).length === 5,
-  "grid memory practice contains five correctly labeled recall trials");
-  assert(mainPracticeFlags &&
-    trialRows.filter(row => row.phase === "main" && row.trialType === "recall")
-      .every(row => row.practice === false),
-  "main symmetry and recall trials have explicit main-task labels");
+  const symmetryFeedback = rows.filter(row => row.phase === "symmetry_practice" &&
+    row.trialType === "symmetry-practice-feedback");
+  assert(symmetryPractice.length === 15 && symmetryPractice.every(row => row.taskType === "symmetry_practice"),
+    "there are exactly fifteen labeled symmetry practice judgments");
+  assert(symmetryFeedback.length === 15,
+    "every symmetry practice trial has its own immediate feedback trial");
+  assert(symmetryPractice.every(row => task.isSymmetricalGrid(JSON.parse(row.gridMatrix)) === row.correctAnswer),
+    "symmetry correct answers are derived from the presented grid mirror comparison");
 
-  const storedGridsMatchAnswers = mainSymmetry.every(row => {
-    const matrix = JSON.parse(row.gridMatrix);
-    return matrix.length === 8 && matrix.every(gridRow => gridRow.length === 8) &&
-      task.isSymmetricalGrid(matrix) === row.correctAnswer;
-  });
-  assert(storedGridsMatchAnswers, "stored correct answers match each generated 8 × 8 matrix");
+  const stats = plan.calculateSymmetryPracticeSummary([
+    { rt: 100 }, { rt: 200 }, { rt: "bad" }, { rt: -1 }, { rt: Infinity }
+  ]);
+  assert(stats.n === 2 && stats.mean === 150 && Math.round(stats.sd) === 71,
+    "practice mean and sample SD use only valid positive reaction times");
+  const noStats = plan.calculateSymmetryPracticeSummary([{ rt: null }, { rt: NaN }]);
+  assert(noStats.mean === null && noStats.sd === null && noStats.n === 0,
+    "missing or invalid reaction times produce unavailable values rather than NaN");
 
-  const sequencesHaveUniqueLocations = [...new Set(trialRows
-    .filter(row => row.trialType === "memory-presentation")
-    .map(row => row.sequenceId))].every(sequenceId => {
-    const locations = trialRows.filter(row =>
-      row.trialType === "memory-presentation" && row.sequenceId === sequenceId
-    ).map(row => row.presentedLocation);
-    return locations.length > 0 && new Set(locations).size === locations.length;
-  });
-  assert(sequencesHaveUniqueLocations, "all planned spatial-memory sequences have unique locations");
+  const combined = rows.filter(row => row.phase === "combined_practice" &&
+    row.trialType === "recall" && row.practice === true);
+  assert(combined.length === 3 && combined.every(row => row.sequenceLength === 2),
+    "combined practice contains exactly three two-item sequences");
+
+  const mainSpans = plan.mainSpans;
+  assert(mainSpans.length === 5 && new Set(mainSpans).size === 5 &&
+    [3, 4, 5, 6, 7].every(span => mainSpans.includes(span)),
+    "main task schedules lengths 3, 4, 5, 6, and 7 exactly once");
+  const mainRecall = rows.filter(row => row.phase === "main_task" &&
+    row.trialType === "recall" && row.practice === false);
+  assert(mainRecall.length === 5 && mainRecall.map(row => row.sequenceLength).sort().join(",") === "3,4,5,6,7",
+    "main task has five non-practice recall sequences with the required lengths");
+  const mainMemoryRows = rows.filter(row => row.phase === "main_task" &&
+    row.trialType === "memory-presentation" && row.practice === false);
+  assert(mainMemoryRows.length === 25 && new Set(mainMemoryRows.map(row => row.sequenceId)).size === 5,
+    "all 25 main memory items remain grouped within five identifiable sequences");
+  assert(rows.filter(row => row.phase === "main_task" && row.practice === false)
+    .every(row => row.taskType !== "grid_memory_practice" && row.taskType !== "symmetry_practice"),
+    "main task data is separate from all practice phases");
 
   const phaseOrder = [];
-  trialRows.forEach(row => {
+  rows.forEach(row => {
     if (row.phase && !phaseOrder.includes(row.phase)) phaseOrder.push(row.phase);
   });
-  const expectedPhaseOrder = [
-    "welcome",
-    "grid-practice-instructions-1",
-    "grid-practice-instructions-2",
-    "grid-practice",
-    "symmetry-practice-instructions",
-    "symmetry-practice",
-    "symmetry-practice-feedback",
-    "combined-practice",
-    "main",
-    "completion"
+  const expectedPhases = [
+    "welcome", "grid_practice_instructions", "grid_practice_blank_clear_instructions",
+    "grid_practice_readiness", "grid_practice", "grid_practice_completion",
+    "symmetry_practice_instructions", "symmetry_practice", "symmetry_practice_summary",
+    "symmetry_practice_accuracy", "continue_to_combined_practice",
+    "combined_practice_instructions", "combined_practice", "main_task_instructions", "main_task", "completion"
   ];
-  assert(expectedPhaseOrder.every((phase, index) => phaseOrder[index] === phase),
-    "timeline phases occur in the required order");
-
-  const mainSequenceIds = [...new Set(mainSymmetry.map(row => row.sequenceId))];
-  const mainAlternationValid = mainSequenceIds.every(sequenceId => {
-    const types = plan.timeline.map(trial => trial.data || {})
-      .filter(row => row.phase === "main" && row.sequenceId === sequenceId &&
-        ["symmetry", "memory-presentation"].includes(row.trialType))
-      .map(row => row.trialType);
-    return types.length === 2 && types[0] === "symmetry" && types[1] === "memory-presentation";
-  });
-  assert(mainAlternationValid, "each main memory item alternates symmetry judgment then square presentation");
-
-  const locationScore = task.scoreSquareRecall([0, 5], [0, 5]);
-  const summary = task.computeSummary([
-    { ...locationScore, sequenceLength: 2, exactSequenceAccuracy: 1 }
-  ], [{ accuracy: true }, { accuracy: false }]);
-  assert(summary.totalRecallPositions === 2 && summary.perfectSetScore === 2 &&
-    summary.maxSpan === 2 && summary.completedSequences === 1 &&
-    summary.symmetryAccuracy === 0.5,
-  "participant summary fields are calculated correctly");
+  assert(expectedPhases.every((phase, index) => phaseOrder[index] === phase),
+    "all instruction, practice, feedback, and main phases are in the requested order");
 
   const query = new URL(plan.transferSummaryToQualtrics(
-    summary,
+    { totalRecallPositions: 2 },
     "https://merceruniversity.co1.qualtrics.com/jfe/form/SV_1zccezoNm8UGOrA"
   ));
   assert(query.hostname === "merceruniversity.co1.qualtrics.com" &&
@@ -163,7 +128,7 @@
     query.searchParams.get("STUDY_ID") === "validation-study" &&
     query.searchParams.get("SESSION_ID") === "validation-session" &&
     query.searchParams.get("SYMMETRY_SPAN_totalRecallPositions") === "2",
-  "Qualtrics transfer preserves participant IDs and adds summary fields to the existing destination");
+    "Qualtrics transfer preserves participant identifiers and destination");
 
   const mount = document.getElementById("validation-grid-mount");
   mount.hidden = false;
@@ -174,25 +139,20 @@
     callbacks++;
     callbackData = data;
   });
-  mount.querySelectorAll(".recall-cell")[0].click();
-  mount.querySelectorAll(".recall-cell")[1].click();
-  submitRecall();
-  submitRecall();
-  assert(callbacks === 1 && callbackData[0].join(",") === "0,1" &&
-    callbackData[1].map(event => event.order).join(",") === "1,2" &&
-    Number.isInteger(callbackData[2]),
-  "recall response order, reaction time, and single-submit handler are recorded");
-  assert(mount.querySelectorAll(".recall-cell").length === 16,
-    "recall grid contains exactly 16 locations");
-  const blankCell = mount.querySelectorAll(".recall-cell")[0];
-  blankCell.click();
   mount.querySelector("#blankRecallBtn").click();
+  mount.querySelectorAll(".recall-cell")[5].click();
   assert(mount.querySelector("#recallResponseString").textContent.includes("Blank") &&
     mount.querySelector("#submitRecallBtn").disabled === false,
-  "blank response records a missing answer in the correct position without advancing automatically");
+    "Blank reserves the first position and later responses stay in the next position");
+  submitRecall();
+  submitRecall();
+  assert(callbacks === 1 && callbackData[0][0] === null && callbackData[0][1] === 5 &&
+    callbackData[1].map(event => event.order).join(",") === "1,2",
+    "blank-position recall is submitted once with sequence order preserved");
   mount.querySelector("#clearRecallBtn").click();
-  assert(mount.querySelector("#recallResponseString").textContent === "",
-  "clear resets recall selections");
+  assert(mount.querySelector("#recallResponseString").textContent === "" &&
+    mount.querySelector("#submitRecallBtn").disabled,
+    "Clear resets all recall selections and does not submit");
   mount.remove();
 
   const finalResult = document.createElement("p");

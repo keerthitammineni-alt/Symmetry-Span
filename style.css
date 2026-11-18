@@ -41,9 +41,28 @@ body {
   box-shadow: 0 4px 16px rgb(24 39 56 / 8%);
 }
 
+.instruction-page {
+  display: flex;
+  min-height: min(70vh, 620px);
+  align-items: center;
+  justify-content: center;
+}
+
+.instruction-content {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.instruction-content p + p,
+.feedback-panel p + p {
+  margin-top: 1em;
+}
+
 h1,
 h2 {
   margin-top: 0;
+  line-height: 1.25;
 }
 
 p {
@@ -173,10 +192,15 @@ button:disabled {
 @media (max-width: 520px) {
   body {
     padding: 10px;
+    align-items: flex-start;
   }
 
   .jspsych-display-element {
     padding: 4px !important;
+  }
+
+  .instruction-page {
+    min-height: auto;
   }
 
   .symmetry-grid {
@@ -186,5 +210,11 @@ button:disabled {
   .memory-stimulus-grid,
   .recall-grid {
     width: min(82vw, 320px);
+  }
+
+  button,
+  .jspsych-btn {
+    max-width: 100%;
+    white-space: normal;
   }
 }
