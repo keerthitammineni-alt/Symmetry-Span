@@ -56,13 +56,10 @@
   const balanced = task.generateBalancedAnswers(40);
   assert(balanced.filter(Boolean).length === 20 && balanced.filter(answer => !answer).length === 20,
     "balanced symmetry plan has equal categories");
-  let oddCountRejected = false;
-  try {
-    task.generateBalancedAnswers(3);
-  } catch (error) {
-    oddCountRejected = true;
-  }
-  assert(oddCountRejected, "unbalanceable odd symmetry trial count is rejected");
+  const oddBalanced = task.generateBalancedAnswers(25);
+  assert(oddBalanced.length === 25 &&
+    Math.abs(oddBalanced.filter(Boolean).length - oddBalanced.filter(answer => !answer).length) === 1,
+  "odd symmetry trial plans balance categories as evenly as possible");
 
   const plan = window.SYMMETRY_SPAN_RUNTIME;
   const trialRows = plan.timeline.map(trial => trial.data || {});
@@ -71,19 +68,47 @@
   );
   const mainCategories = mainSymmetry.filter(row => row.correctAnswer).length;
   const mainPracticeFlags = mainSymmetry.every(row => row.practice === false);
-  assert(mainSymmetry.length === 4 && mainCategories === 2 &&
-    mainSymmetry.length - mainCategories === 2,
-  "main symmetry trials are balanced and labeled non-practice");
+  assert(mainSymmetry.length === 25 &&
+    Math.abs(mainCategories - (mainSymmetry.length - mainCategories)) === 1,
+  "main symmetry trials are near-balanced and labeled non-practice");
+
+  const mainSpans = [...new Set(mainSymmetry.map(row => row.sequenceId))].map(sequenceId =>
+    mainSymmetry.find(row => row.sequenceId === sequenceId).sequenceLength
+  ).sort((left, right) => left - right);
+  assert(plan.mainSpans.length === 5 && plan.mainSpans.slice().sort((a, b) => a - b).join(",") === "3,4,5,6,7" &&
+    plan.mainSpans.every(span => plan.mainSpans.filter(candidate => candidate === span).length === 1) &&
+    mainSpans.join(",") === "3,4,5,6,7",
+  "main task randomizes sequence order while including each length from 3 to 7 exactly once");
+  const mainInstructionRows = trialRows.filter(row =>
+    row.phase === "main" && row.trialType === "instruction"
+  );
+  const mainInstructionText = plan.timeline
+    .filter(trial => trial.data && trial.data.phase === "main" &&
+      trial.data.trialType === "instruction")
+    .map(trial => typeof trial.stimulus === "string" ? trial.stimulus : "")
+    .join(" ");
+  assert(mainInstructionRows.length === 1 &&
+    !/sequence lengths from|sequence \d+ of \d+|contains \d+ squares?/i.test(mainInstructionText),
+  "main-task instructions do not disclose the sequence schedule, sequence number, or square count");
 
   const gridPractice = trialRows.filter(row => row.phase === "grid-practice" &&
     row.trialType === "recall" && row.practice === true);
   assert(gridPractice.length === 5,
   "grid practice contains exactly five labeled recall trials");
+  assert(trialRows.filter(row => row.phase === "grid-practice" &&
+    row.trialType === "recall-feedback").length === 5,
+  "each grid practice recall is followed by feedback");
 
   const symmetryPractice = trialRows.filter(row => row.phase === "symmetry-practice" &&
     row.trialType === "symmetry" && row.practice === true);
   assert(symmetryPractice.length === 15,
   "symmetry practice contains exactly fifteen labeled trials");
+  assert(trialRows.filter(row => row.phase === "symmetry-practice" &&
+    row.trialType === "practice-feedback").length === 15,
+  "each symmetry practice trial is followed by correctness feedback");
+  assert(trialRows.filter(row => row.phase === "combined-practice" &&
+    row.trialType === "recall" && row.practice === true).length === 3,
+  "combined practice contains exactly three trials");
   const practiceSymmetryCount = symmetryPractice.filter(row => row.correctAnswer).length;
   assert(symmetryPractice.every(row => row.taskType === "symmetry-practice") &&
     gridPractice.every(row => row.taskType === "grid-memory-practice") &&
@@ -125,6 +150,7 @@
     "grid-practice-instructions-1",
     "grid-practice-instructions-2",
     "grid-practice",
+    "grid-practice-complete",
     "symmetry-practice-instructions",
     "symmetry-practice",
     "symmetry-practice-feedback",
@@ -141,9 +167,11 @@
       .filter(row => row.phase === "main" && row.sequenceId === sequenceId &&
         ["symmetry", "memory-presentation"].includes(row.trialType))
       .map(row => row.trialType);
-    return types.length === 2 && types[0] === "symmetry" && types[1] === "memory-presentation";
+    const sequenceLength = mainSymmetry.find(row => row.sequenceId === sequenceId).sequenceLength;
+    return types.length === sequenceLength * 2 &&
+      types.every((type, index) => type === (index % 2 === 0 ? "symmetry" : "memory-presentation"));
   });
-  assert(mainAlternationValid, "each main memory item alternates symmetry judgment then square presentation");
+  assert(mainAlternationValid, "each main sequence alternates symmetry judgment then square presentation for every item");
 
   const locationScore = task.scoreSquareRecall([0, 5], [0, 5]);
   const summary = task.computeSummary([
@@ -185,6 +213,7 @@
   assert(mount.querySelectorAll(".recall-cell").length === 16,
     "recall grid contains exactly 16 locations");
   const blankCell = mount.querySelectorAll(".recall-cell")[0];
+  mount.querySelector("#clearRecallBtn").click();
   blankCell.click();
   mount.querySelector("#blankRecallBtn").click();
   assert(mount.querySelector("#recallResponseString").textContent.includes("Blank") &&

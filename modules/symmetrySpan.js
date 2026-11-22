@@ -107,12 +107,15 @@
   }
 
   function generateBalancedAnswers(trialCount, random = Math.random) {
-    if (!Number.isInteger(trialCount) || trialCount < 0 || trialCount % 2 !== 0) {
-      throw new Error("The main symmetry trial count must be an even non-negative integer.");
+    if (!Number.isInteger(trialCount) || trialCount < 0) {
+      throw new Error("The symmetry trial count must be a non-negative integer.");
     }
+    const extraSymmetrical = trialCount % 2 !== 0 && random() < 0.5;
+    const symmetricalCount = Math.floor(trialCount / 2) + Number(extraSymmetrical);
+    const asymmetricalCount = trialCount - symmetricalCount;
     return shuffle([
-      ...Array(trialCount / 2).fill(true),
-      ...Array(trialCount / 2).fill(false)
+      ...Array(symmetricalCount).fill(true),
+      ...Array(asymmetricalCount).fill(false)
     ], random);
   }
 
