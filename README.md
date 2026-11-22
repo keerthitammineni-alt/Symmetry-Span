@@ -13,10 +13,10 @@ Browser-based spatial working-memory experiment implemented with the repository'
 ## Experiment flow
 
 1. Welcome and task instructions.
-2. Three symmetry-only practice judgments. Their category counts are 2/1 in either order: with three trials, exact 50/50 balance is impossible. Feedback is shown.
-3. Three spatial-memory-only practice sequences, each with two unique locations and recall feedback.
-4. Combined-task instructions and a configurable number of practice sequences (two locations per sequence). Symmetry judgments and square presentations alternate; completed recall sequences receive practice feedback.
-5. Main Symmetry Span sequences. Sequence lengths are randomized; each sequence alternates symmetry judgment and memory-square presentation, followed by ordered recall. No correctness feedback is shown.
+2. Five spatial-memory-only practice sequences, each with two unique locations and feedback showing how many were recalled in the correct order. A Continue screen introduces symmetry practice.
+3. Fifteen symmetry-only practice judgments. Each judgment is followed by Correct/Incorrect feedback. The summary reports mean solve time, sample SD, and accuracy out of 15, followed by a Continue prompt for combined practice.
+4. Combined-task instructions and three practice sequences (two locations per sequence). Symmetry judgments and square presentations alternate; completed recall sequences receive practice feedback.
+5. Main Symmetry Span sequences with lengths 3–7 in randomized order, each length appearing once by default. Each sequence alternates symmetry judgment and memory-square presentation, followed by ordered recall. No correctness feedback is shown.
 6. Completion, a participant-level summary, a trial-level CSV download link, and return to Qualtrics when configured.
 
 ## Configuration
@@ -26,9 +26,9 @@ Override `window.SYMMETRY_SPAN_CONFIG` in a script before `experiment.js` in `in
 ```html
 <script>
   window.SYMMETRY_SPAN_CONFIG = {
-    spans: [1, 2, 3, 4, 5, 6, 7],
-    repetitionsPerSpan: 2,
-    combinedPracticeTrials: 2,
+    spans: [3, 4, 5, 6, 7],
+    repetitionsPerSpan: 1,
+    combinedPracticeTrials: 3,
     stimulusDuration: 800,
     interStimulusInterval: 250,
     qualtricsReturnUrl: "https://merceruniversity.co1.qualtrics.com/jfe/form/SV_1zccezoNm8UGOrA"
@@ -36,13 +36,13 @@ Override `window.SYMMETRY_SPAN_CONFIG` in a script before `experiment.js` in `in
 </script>
 ```
 
-- `spans`: non-empty list of integer sequence lengths from 1 to 7. Each selected length is repeated `repetitionsPerSpan` times.
+- `spans`: non-empty list of integer sequence lengths from 1 to 7. The default main schedule uses lengths 3 through 7.
 - `repetitionsPerSpan`: positive integer.
 - `combinedPracticeTrials`: positive integer; practice sequences each contain two locations.
 - `stimulusDuration` and `interStimulusInterval`: non-negative integer milliseconds.
 - `qualtricsReturnUrl`: existing study destination by default. Set to `""` to disable the redirect.
 
-To guarantee exactly equal numbers of symmetrical and asymmetrical judgments, the total number of main-task memory items (`sum(spans) × repetitionsPerSpan`) must be even. Invalid odd totals are rejected instead of silently producing an imbalanced task. The default schedule uses two replications at every span 1–7 and is balanced.
+Symmetry categories are balanced exactly when the number of main-task memory items (`sum(spans) × repetitionsPerSpan`) is even; with an odd number, category counts differ by one. The default schedule has 25 main-task memory items, so the two categories are as evenly distributed as possible.
 
 ## Trial data and scoring
 
@@ -85,7 +85,7 @@ Open <http://localhost:8000/> in a modern browser. The files must remain in thei
 
 ## Repeatable validation
 
-With the local server running, open <http://localhost:8000/tests/validation.html>. The page runs browser-based checks for 8 × 8 grid shape/symmetry, rendered grid cell counts, unique 1–7 location sequences, recall scoring, balanced main symmetry labels, required phase order, trial labels, combined-task alternation, summary calculations, and single-submit recall response handling. A final PASS/FAIL line is displayed on the page; check the browser console for JavaScript errors.
+With the local server running, open <http://localhost:8000/tests/validation.html?PROLIFIC_PID=validation-pid&STUDY_ID=validation-study&SESSION_ID=validation-session>. The page runs browser-based checks for 8 × 8 grid shape/symmetry, rendered grid cell counts, unique 1–7 location sequences, recall scoring, balanced main symmetry labels, required phase order, trial labels, combined-task alternation, summary calculations, and single-submit recall response handling. A final PASS/FAIL line is displayed on the page; check the browser console for JavaScript errors.
 
 ## Deployment
 

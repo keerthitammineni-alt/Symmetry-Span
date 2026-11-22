@@ -1,9 +1,9 @@
 // Automated Symmetry Span task, using jsPsych 8.
 
 const DEFAULT_CONFIG = {
-  spans: [1, 2, 3, 4, 5, 6, 7],
-  repetitionsPerSpan: 2,
-  combinedPracticeTrials: 2,
+  spans: [3, 4, 5, 6, 7],
+  repetitionsPerSpan: 1,
+  combinedPracticeTrials: 3,
   stimulusDuration: 800,
   interStimulusInterval: 250,
   qualtricsReturnUrl: "https://merceruniversity.co1.qualtrics.com/jfe/form/SV_1zccezoNm8UGOrA"
@@ -43,11 +43,6 @@ function validateConfig() {
         throw new Error(`SYMMETRY_SPAN_CONFIG.${key} must be a ${requirement} integer.`);
       }
     });
-  const mainMemoryItems = config.spans.reduce((sum, span) => sum + span, 0) *
-    config.repetitionsPerSpan;
-  if (mainMemoryItems % 2 !== 0) {
-    throw new Error("The configured main-task item count must be even to balance symmetry categories exactly.");
-  }
 }
 
 function addInstructions(title, paragraphs, phase, button = "Continue") {
@@ -110,7 +105,7 @@ function addSymmetryTrial({
       type: jsPsychHtmlButtonResponse,
       stimulus: function () {
         const result = jsPsych.data.get().last(1).values()[0];
-        return `<section class="feedback-panel"><h2>${result.accuracy ? "Correct" : "Not quite"}</h2><p>The grid was ${result.correctAnswerLabel.toLowerCase()}.</p></section>`;
+        return `<section class="feedback-panel"><h2>${result.accuracy ? "Correct" : "Incorrect"}</h2><p>The grid was ${result.correctAnswerLabel.toLowerCase()}.</p></section>`;
       },
       choices: ["Continue"],
       data: { phase, practice: true, trialType: "practice-feedback" }
@@ -230,7 +225,10 @@ function addRecallFeedback(phase) {
     type: jsPsychHtmlButtonResponse,
     stimulus: function () {
       const result = jsPsych.data.get().last(1).values()[0];
-      return `<section class="feedback-panel"><h2>Recall Practice</h2><p>You recalled ${result.positionCorrect} of ${result.sequenceLength} locations in the correct positions.</p></section>`;
+      const recallMessage = phase === "grid-practice"
+        ? `You recalled ${result.positionCorrect} of ${result.sequenceLength} grids in the correct order.`
+        : `You recalled ${result.positionCorrect} of ${result.sequenceLength} locations in the correct positions.`;
+      return `<section class="feedback-panel"><h2>Recall Practice</h2><p>${recallMessage}</p></section>`;
     },
     choices: ["Continue"],
     data: { phase, practice: true, trialType: "recall-feedback" }
@@ -359,20 +357,25 @@ function addSymmetryPracticeFeedback() {
       );
       const validCount = practiceRows.length;
       const correctCount = practiceRows.filter(row => row.accuracy).length;
-      const accuracyPercent = validCount ? Math.round((correctCount / validCount) * 100) : 0;
+      const accuracyPercent = Math.round((correctCount / 15) * 100);
       const validRtRows = practiceRows.filter(row => Number.isFinite(row.rt) && row.rt >= 0);
-      const meanSolveTime = validRtRows.length
-        ? validRtRows.reduce((sum, row) => sum + Number(row.rt), 0) / validRtRows.length
+      const solveTimes = validRtRows.map(row => Number(row.rt));
+      const meanSolveTime = solveTimes.length
+        ? solveTimes.reduce((sum, rt) => sum + rt, 0) / solveTimes.length
+        : null;
+      const solveTimeSd = solveTimes.length
+        ? Math.sqrt(solveTimes.reduce((sum, rt) => sum + (rt - meanSolveTime) ** 2, 0) /
+          Math.max(solveTimes.length - 1, 1))
         : null;
 
       const accuracyText = validCount
-        ? `Your accuracy during the Symmetry practice was ${correctCount} out of ${validCount} (${accuracyPercent}%).`
-        : "Your accuracy during the Symmetry practice was unavailable because no valid practice responses were recorded.";
-      const meanSolveText = Number.isFinite(meanSolveTime) && meanSolveTime >= 0
-        ? `Mean solve time: ${Math.round(meanSolveTime).toLocaleString()} ms`
-        : "Mean solve time: unavailable";
+        ? `Your accuracy during the symmetry practice was <strong>${correctCount}</strong> out of <strong>15</strong> (${accuracyPercent}%).`
+        : "Your accuracy during the symmetry practice was unavailable because no valid practice responses were recorded.";
+      const solveTimeSummary = Number.isFinite(meanSolveTime) && Number.isFinite(solveTimeSd)
+        ? `Your mean solve time was ${Math.round(meanSolveTime).toLocaleString()} ms (SD ${Math.round(solveTimeSd).toLocaleString()} ms).`
+        : "Your mean solve time and SD were unavailable.";
 
-      return `<section class="feedback-panel"><h2>Symmetry Practice Accuracy</h2><p>${accuracyText}</p><p>${meanSolveText}</p><p>In the main task you’ll be asked to respond quickly and accurately. Please try to keep accuracy high.</p></section>`;
+      return `<section class="feedback-panel"><h2>Symmetry Practice Summary</h2><p>${solveTimeSummary}</p><h3>Symmetry Practice Accuracy</h3><p>${accuracyText}</p><p>In the main task you'll be asked to respond quickly and accurately. Please try to keep accuracy high.</p><p>Press Continue when you are ready to practice both tasks together.</p></section>`;
     },
     choices: ["Continue"],
     data: { phase: "symmetry-practice-feedback", trialType: "symmetry-practice-feedback" }
@@ -404,6 +407,10 @@ addInstructions("Grid Practice", [
 
 for (let i = 0; i < 5; i++) addGridPracticeTrial();
 
+addInstructions("Grid Practice Complete", [
+  "Press Continue when you are ready for the symmetry practice."
+], "grid-practice-complete");
+
 addInstructions("Symmetry Practice", [
   "In this portion of the task, you will be shown a series of shaded grids on the screen.",
   "Your job is to assess whether the grid is symmetrical or not symmetrical along its vertical axis.",
@@ -416,13 +423,22 @@ symmetryPracticeTypes.forEach(isSymmetric => addSymmetryTrial({
   practice: true,
   phase: "symmetry-practice",
   isSymmetric,
-  showFeedback: false
+  showFeedback: true
 }));
 
 addSymmetryPracticeFeedback();
 
+const combinedPracticeCount = config.combinedPracticeTrials === 3
+  ? "three"
+  : config.combinedPracticeTrials;
 addInstructions("Combined Practice", [
-  "A Symmetry Judgment will alternate with each highlighted memory square. At the end of the sequence, recall every location in the order presented."
+  "Now you will practice the full task.",
+  "On each trial, you will first solve a symmetry problem and decide whether the proposed answer is Symmetrical or Not Symmetrical.",
+  "After making that decision, you will see a shaded grid cell appear on the screen.",
+  "This sequence of a symmetry problem and then a shaded cell will repeat several times. After the last shaded cell, the grid will appear and you should recall the shaded cells you saw in the order in which they appeared.",
+  "Remember: do your best to solve the symmetry problems quickly and accurately while also remembering the shaded cells.",
+  "When you are ready to begin the combined practice, click the button below.",
+  `You will complete ${combinedPracticeCount} practice trials.`
 ], "combined-practice", "Begin Practice");
 const combinedPracticeSymmetryAnswers = task.generateBalancedAnswers(
   config.combinedPracticeTrials * 2
@@ -436,7 +452,7 @@ for (let i = 0; i < config.combinedPracticeTrials; i++) {
 }
 
 addInstructions("Main Symmetry Span task", [
-  "The main task follows the Combined Practice procedure. Sequence lengths vary from one to seven locations.",
+  "The main task follows the Combined Practice procedure.",
   "Make each Symmetry Judgment accurately and do your best to remember the square locations. You will not receive correctness feedback during the main task."
 ], "main", "Begin task");
 
@@ -447,10 +463,7 @@ const mainSymmetryAnswers = task.generateBalancedAnswers(
   mainSpans.reduce((sum, span) => sum + span, 0)
 );
 const mainSymmetryPlan = [...mainSymmetryAnswers];
-mainSpans.forEach((span, index) => {
-  addInstructions(`Sequence ${index + 1} of ${mainSpans.length}`, [
-    `This sequence contains ${span} square${span === 1 ? "" : "s"}. Remember each location as it appears.`
-  ], "main", "Begin sequence");
+mainSpans.forEach(span => {
   addCombinedTrial(span, {
     practice: false,
     phase: "main",
